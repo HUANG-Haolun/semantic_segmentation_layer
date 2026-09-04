@@ -41,7 +41,7 @@
 
 #include "nav2_costmap_2d/costmap_math.hpp"
 #include "nav2_costmap_2d/footprint.hpp"
-#include "nav2_ros_common/qos_profiles.hpp"
+#include "semantic_segmentation_layer/nav2_compat.hpp"
 #include "rclcpp/parameter_events_filter.hpp"
 
 using nav2_costmap_2d::INSCRIBED_INFLATED_OBSTACLE;

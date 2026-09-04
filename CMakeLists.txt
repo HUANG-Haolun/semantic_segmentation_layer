@@ -13,7 +13,7 @@ find_package(message_filters REQUIRED)
 find_package(nav2_costmap_2d REQUIRED)
 find_package(nav2_util REQUIRED)
 find_package(nav2_common REQUIRED)
-find_package(nav2_ros_common REQUIRED)
+find_package(nav2_ros_common QUIET)   # Kilted+ only; Jazzy 用 nav2_compat.hpp 兜住
 find_package(nav_msgs REQUIRED)
 find_package(pluginlib REQUIRED)
 find_package(rclcpp REQUIRED)
@@ -50,7 +50,6 @@ target_link_libraries(semantic_segmentation_layer
     message_filters::message_filters
     nav2_costmap_2d::nav2_costmap_2d_core
     nav2_util::nav2_util_core
-    nav2_ros_common::nav2_ros_common
     pluginlib::pluginlib
     rclcpp::rclcpp
     rclcpp_lifecycle::rclcpp_lifecycle
@@ -85,8 +84,18 @@ if(BUILD_TESTING)
   find_package(ament_lint_auto REQUIRED)
   ament_lint_auto_find_test_dependencies()
   find_package(ament_cmake_gtest REQUIRED)
+  # Jazzy 的 nav2_common 只提供 nav2_package()；nav2_add_gtest() 是 Kilted+ 才有的。
+  if(NOT COMMAND nav2_add_gtest)
+    macro(nav2_add_gtest target)
+      ament_add_gtest(${target} ${ARGN})
+    endmacro()
+  endif()
   add_subdirectory(test)
 endif()
 
-ament_package()
+# Kilted+ 才有 nav2_ros_common；Jazzy 上由 nav2_compat.hpp 提供等价物。
+if(nav2_ros_common_FOUND)
+  target_link_libraries(${library_name} PUBLIC nav2_ros_common::nav2_ros_common)
+endif()
 
+ament_package()

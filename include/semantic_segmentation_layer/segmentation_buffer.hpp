@@ -48,7 +48,7 @@
 #include <vector>
 
 #include "Eigen/Geometry"
-#include "nav2_ros_common/lifecycle_node.hpp"
+#include "semantic_segmentation_layer/nav2_compat.hpp"
 #include "rclcpp/rclcpp.hpp"
 #include "rclcpp/time.hpp"
 #include "sensor_msgs/msg/image.hpp"

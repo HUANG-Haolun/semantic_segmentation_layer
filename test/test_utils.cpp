@@ -123,7 +123,8 @@ TEST(TestVisualizeTileMap, test_same_multiple_tiles)
     EXPECT_NEAR(point.confidence, 1.0, 1e-3);
 
     TileIndex index = tile_map.worldToIndex(point.x, point.y);
-    EXPECT_EQ(index, TileIndex(1, 1));
+    // Braced init: parenthesized aggregate init is C++20; Jazzy nav2_package() sets C++17.
+    EXPECT_EQ(index, (TileIndex{1, 1}));
 
     if (last_point.class_id == 0) {
       last_point = point;

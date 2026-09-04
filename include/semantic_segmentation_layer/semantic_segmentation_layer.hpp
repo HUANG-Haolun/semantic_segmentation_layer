@@ -54,7 +54,7 @@
 #include "nav2_costmap_2d/layer.hpp"
 #include "nav2_costmap_2d/layered_costmap.hpp"
 #include "semantic_segmentation_layer/segmentation_buffer.hpp"
-#include "nav2_ros_common/node_utils.hpp"
+#include "semantic_segmentation_layer/nav2_compat.hpp"
 #include "sensor_msgs/msg/image.hpp"
 #include "tf2_ros/message_filter.hpp"
 #include "vision_msgs/msg/label_info.hpp"

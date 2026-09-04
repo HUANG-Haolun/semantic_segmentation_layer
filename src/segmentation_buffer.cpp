@@ -101,10 +101,12 @@ SegmentationBuffer::SegmentationBuffer(
   if (visualize_frustum_fov_) {
     frustum_fov_pub_ = node->create_publisher<visualization_msgs::msg::Marker>(buffer_source +
         "/frustum_fov", 1);
+    activate_publisher<visualization_msgs::msg::Marker>(frustum_fov_pub_);
   }
   if(visualize_tile_map_) {
     tile_map_pub_ = node->create_publisher<sensor_msgs::msg::PointCloud2>(buffer_source +
         "/tile_map", 1);
+    activate_publisher<sensor_msgs::msg::PointCloud2>(tile_map_pub_);
   }
 }
 

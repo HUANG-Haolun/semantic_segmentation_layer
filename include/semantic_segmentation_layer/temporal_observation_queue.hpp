@@ -64,6 +64,12 @@ class TemporalObservationQueue
 {
   friend class QueueTestWrapper;
 
+public:
+  /// 每个类别最多保留的观测条数，见 push() 里的说明。取 16 是因为代价计算只需要
+  /// size() 追上 samples_to_max_cost（典型 3）外加一个稳定的置信度均值；这个上限
+  /// 让单格内存与 tile_map_decay_time 解耦，否则长衰减时间会让 deque 无限增长。
+  static constexpr size_t kMaxObservationsPerClass = 16;
+
 private:
   std::unordered_map<uint8_t, std::deque<TileObservation>> class_queues_;
   std::unordered_map<uint8_t, float> class_confidence_sums_;

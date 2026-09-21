@@ -49,6 +49,20 @@ void TemporalObservationQueue::push(TileObservation tile_obs, bool dominant_prio
   // Update confidence sum for this class
   class_confidence_sums_[class_id] += tile_obs.confidence;
 
+  // 时间衰减（purgeOld）原本是这个 deque 唯一的回收路径，而入队是【逐点云点】的
+  // （segmentation_buffer.cpp 在点循环里调用 push），草坪量级约 3 万点/帧。
+  // 也就是说一旦把 tile_map_decay_time 调大到"基本不衰减"，内存会随时间线性涨。
+  // 代价计算只用到两个量：size() 是否达到 samples_to_max_cost，以及平均置信度，
+  // 所以只保留最近 kMaxObservationsPerClass 条即可，多出来的从头部丢弃并同步
+  // 扣减 confidence sum（维持 sum 与队列内容一致的不变式）。
+  // 副作用：size() 会在上限处饱和，下面按 size 比较的 dominant 选举在多个类同时
+  // 打满时会退化成"先到者保持"。当前 ontology 只有 grass 一个会被标记的类，
+  // 不受影响；将来若启用多类竞争需要改成按置信度均值比较。
+  while (queue.size() > kMaxObservationsPerClass) {
+    class_confidence_sums_[class_id] -= queue.front().confidence;
+    queue.pop_front();
+  }
+
   // Check if this class should become dominant
   size_t current_class_size = queue.size();
   bool should_become_dominant = false;

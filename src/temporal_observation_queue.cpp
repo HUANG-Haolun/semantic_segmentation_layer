@@ -48,6 +48,7 @@ void TemporalObservationQueue::push(TileObservation tile_obs, bool dominant_prio
 
   // Update confidence sum for this class
   class_confidence_sums_[class_id] += tile_obs.confidence;
+  class_cost_sums_[class_id] += tile_obs.cost;
 
   // 时间衰减（purgeOld）原本是这个 deque 唯一的回收路径，而入队是【逐点云点】的
   // （segmentation_buffer.cpp 在点循环里调用 push），草坪量级约 3 万点/帧。
@@ -60,6 +61,7 @@ void TemporalObservationQueue::push(TileObservation tile_obs, bool dominant_prio
   // 不受影响；将来若启用多类竞争需要改成按置信度均值比较。
   while (queue.size() > kMaxObservationsPerClass) {
     class_confidence_sums_[class_id] -= queue.front().confidence;
+    class_cost_sums_[class_id] -= queue.front().cost;
     queue.pop_front();
   }
 
@@ -83,6 +85,15 @@ void TemporalObservationQueue::push(TileObservation tile_obs, bool dominant_prio
     // Update dominance
     setDominant(class_id, current_class_size);
   }
+}
+
+float TemporalObservationQueue::getCostSum() const
+{
+  if (dominant_class_id_ != -1) {
+    auto it = class_cost_sums_.find(dominant_class_id_);
+    return (it != class_cost_sums_.end()) ? it->second : 0.0f;
+  }
+  return 0.0f;
 }
 
 float TemporalObservationQueue::getConfidenceSum() const
@@ -121,6 +132,7 @@ void TemporalObservationQueue::purgeOld(double current_time)
       double age = current_time - queue.front().timestamp;
       if (age > decay_time_) {
         class_confidence_sums_[class_id] -= queue.front().confidence;
+        class_cost_sums_[class_id] -= queue.front().cost;
         queue.pop_front();
       } else {
         break;
@@ -133,6 +145,7 @@ void TemporalObservationQueue::purgeOld(double current_time)
     if (queue.empty()) {
       if (class_id == dominant_class_id_) {dominant_removed = true;}
       class_confidence_sums_.erase(class_id);
+      class_cost_sums_.erase(class_id);
       it = class_queues_.erase(it);
     } else {
       ++it;
@@ -158,6 +171,7 @@ void TemporalObservationQueue::clearQueuesExcept(uint8_t keep_class_id)
   for (auto it = class_queues_.begin(); it != class_queues_.end(); ) {
     if (it->first != keep_class_id) {
       class_confidence_sums_.erase(it->first);
+      class_cost_sums_.erase(it->first);
       it = class_queues_.erase(it);
     } else {
       ++it;

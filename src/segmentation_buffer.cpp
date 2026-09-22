@@ -202,6 +202,47 @@ void SegmentationBuffer::bufferSegmentation(
     double cloud_time_seconds = rclcpp::Time(cloud.header.stamp.sec,
         cloud.header.stamp.nanosec).seconds();
 
+    // Find each gradient class's visible left/right road boundary per image row.
+    // This keeps the gradient relative to the detected road rather than to the
+    // full image, so a road entering from one side still receives the full range.
+    const size_t span_size = 256u * segmentation.height;
+    std::vector<int> row_min_u(span_size, static_cast<int>(segmentation.width));
+    std::vector<int> row_max_u(span_size, -1);
+    for (size_t v = 0; v < segmentation.height; ++v) {
+      for (size_t u = 0; u < segmentation.width; ++u) {
+        const size_t pixel_idx = v * segmentation.width + u;
+        const uint8_t class_id = segmentation.data[pixel_idx];
+        if (!segmentation_cost_multimap_->hasClassId(class_id) ||
+          !segmentation_cost_multimap_->getCostById(class_id).lateral_gradient)
+        {
+          continue;
+        }
+        const size_t span_idx = static_cast<size_t>(class_id) * segmentation.height + v;
+        row_min_u[span_idx] = std::min(row_min_u[span_idx], static_cast<int>(u));
+        row_max_u[span_idx] = std::max(row_max_u[span_idx], static_cast<int>(u));
+      }
+    }
+
+    auto observation_cost = [&](uint8_t class_id, int pixel_idx) -> uint8_t {
+        const auto params = segmentation_cost_multimap_->getCostById(class_id);
+        if (!params.lateral_gradient) {
+          return 0;
+        }
+        const int v = pixel_idx / static_cast<int>(segmentation.width);
+        const int u = pixel_idx % static_cast<int>(segmentation.width);
+        const size_t span_idx = static_cast<size_t>(class_id) * segmentation.height + v;
+        const int left = row_min_u[span_idx];
+        const int right = row_max_u[span_idx];
+        const int width = right - left;
+        if (width < params.lateral_min_width_pixels) {
+          return params.base_cost;
+        }
+        const double from_right = static_cast<double>(right - u) / width;
+        const double cost = params.lateral_right_cost + from_right *
+          (static_cast<int>(params.lateral_left_cost) - params.lateral_right_cost);
+        return static_cast<uint8_t>(std::clamp(std::lround(cost), 0l, 252l));
+      };
+
     // copy over the points that are within our segmentation range
     for (size_t v = 0; v < segmentation.height; v++) {
       for (size_t u = 0; u < segmentation.width; u++) {
@@ -233,14 +274,17 @@ void SegmentationBuffer::bufferSegmentation(
             // Cost-based: pick highest max_cost
             uint8_t current_class = segmentation.data[pixel_idx];
             uint8_t existing_class = segmentation.data[it->second];
-            auto current_cost = segmentation_cost_multimap_->getCostById(current_class);
-            auto existing_cost = segmentation_cost_multimap_->getCostById(existing_class);
-            if (current_cost.max_cost > existing_cost.max_cost) {
+            auto current_params = segmentation_cost_multimap_->getCostById(current_class);
+            auto existing_params = segmentation_cost_multimap_->getCostById(existing_class);
+            const uint8_t current_cost = current_params.lateral_gradient ?
+              observation_cost(current_class, pixel_idx) : current_params.max_cost;
+            const uint8_t existing_cost = existing_params.lateral_gradient ?
+              observation_cost(existing_class, it->second) : existing_params.max_cost;
+            if (current_cost > existing_cost) {
               best_observations_idxs[costmap_index] = pixel_idx;
               RCLCPP_DEBUG(logger_,
-                  "COST-BASED: Replaced tile observation - current_class=%d (max_cost=%d) > existing_class=%d (max_cost=%d)",
-                          current_class, current_cost.max_cost, existing_class,
-                  existing_cost.max_cost);
+                  "COST-BASED: Replaced tile observation - current_class=%d (cost=%d) > existing_class=%d (cost=%d)",
+                          current_class, current_cost, existing_class, existing_cost);
             }
           } else {
             // Confidence-based: pick highest confidence
@@ -290,7 +334,8 @@ void SegmentationBuffer::bufferSegmentation(
       // Only process observations with defined class IDs
       if (segmentation_cost_multimap_->hasClassId(class_id)) {
         TileObservation best_obs{class_id,
-          static_cast<float>(confidence.data[img_idx_for_best_obs]), cloud_time_seconds};
+          static_cast<float>(confidence.data[img_idx_for_best_obs]), cloud_time_seconds,
+          observation_cost(class_id, img_idx_for_best_obs)};
         bool dominant_priority =
           segmentation_cost_multimap_->getCostById(class_id).dominant_priority;
         temporal_tile_map_->pushObservation(best_obs, costmap_index, dominant_priority);

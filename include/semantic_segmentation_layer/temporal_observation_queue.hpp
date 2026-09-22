@@ -53,6 +53,8 @@ struct TileObservation
   uint8_t class_id;
   float confidence;
   double timestamp;
+  // Per-observation navigation cost. Zero means use the class heuristic.
+  uint8_t cost{0};
 };
 
 /**
@@ -73,6 +75,7 @@ public:
 private:
   std::unordered_map<uint8_t, std::deque<TileObservation>> class_queues_;
   std::unordered_map<uint8_t, float> class_confidence_sums_;
+  std::unordered_map<uint8_t, float> class_cost_sums_;
   int dominant_class_id_ = -1;
   size_t dominant_class_size_ = 0;
   double decay_time_;
@@ -110,6 +113,9 @@ public:
    * @return The sum of confidences for the dominant class.
    */
   float getConfidenceSum() const;
+
+  /** @brief Gets the sum of per-observation costs for the dominant class. */
+  float getCostSum() const;
 
   /**
    * @brief Gets the class ID of the dominant class (most samples).

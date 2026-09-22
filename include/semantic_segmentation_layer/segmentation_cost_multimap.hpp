@@ -47,9 +47,15 @@
  */
 struct CostHeuristicParams
 {
-  uint8_t base_cost, max_cost, mark_confidence;
-  int samples_to_max_cost;
-  bool dominant_priority;
+  uint8_t base_cost{0}, max_cost{0}, mark_confidence{0};
+  int samples_to_max_cost{0};
+  bool dominant_priority{false};
+  // Optional image-space transverse gradient.  For a forward-facing camera,
+  // image right is the robot's right while driving forward.
+  bool lateral_gradient{false};
+  uint8_t lateral_right_cost{0};
+  uint8_t lateral_left_cost{0};
+  int lateral_min_width_pixels{20};
 };
 
 /**
@@ -80,7 +86,7 @@ public:
       if (cost_it == nameToCostMap.end()) {
         // This shouldn't happen because we already checked in createSegmentationCostMultimap
         // but let's be extra safe
-        id_to_cost_[id] = CostHeuristicParams{0, 0, 0, 0, false};
+        id_to_cost_[id] = CostHeuristicParams{};
         continue;
       }
       id_to_cost_[id] = cost_it->second;
@@ -110,7 +116,7 @@ public:
     std::lock_guard<std::mutex> lock(mutex_);
     auto it = id_to_cost_.find(id);
     if (it == id_to_cost_.end()) {
-      return CostHeuristicParams{0, 0, 0, 0, false};
+      return CostHeuristicParams{};
     }
     return it->second;
   }

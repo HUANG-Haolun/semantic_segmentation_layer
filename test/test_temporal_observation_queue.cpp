@@ -77,6 +77,22 @@ TEST(TestTemporalObservationQueue, test_push_non_dominant)
   EXPECT_THROW(queue.getClassQueue(1), std::invalid_argument);
 }
 
+TEST(TestTemporalObservationQueue, test_observation_cost_average_inputs)
+{
+  QueueTestWrapper queue;
+  queue.setDecayTime(10.0);
+
+  queue.push(TileObservation{3, 200.0f, 1.0, 110});
+  queue.push(TileObservation{3, 200.0f, 2.0, 220});
+
+  EXPECT_EQ(queue.size(), 2);
+  EXPECT_FLOAT_EQ(queue.getCostSum(), 330.0f);
+
+  queue.purgeOld(12.0);
+  EXPECT_EQ(queue.size(), 1);
+  EXPECT_FLOAT_EQ(queue.getCostSum(), 220.0f);
+}
+
 /**
  * Test push with dominant priority
  */

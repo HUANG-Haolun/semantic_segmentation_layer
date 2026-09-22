@@ -197,6 +197,18 @@ void SemanticSegmentationLayer::onInitialize()
       nav2::declare_parameter_if_not_declared(node,
           name_ + "." + source + "." + class_type + ".dominant_priority",
           rclcpp::ParameterValue(false));
+      nav2::declare_parameter_if_not_declared(node,
+          name_ + "." + source + "." + class_type + ".lateral_gradient",
+          rclcpp::ParameterValue(false));
+      nav2::declare_parameter_if_not_declared(node,
+          name_ + "." + source + "." + class_type + ".lateral_right_cost",
+          rclcpp::ParameterValue(0));
+      nav2::declare_parameter_if_not_declared(node,
+          name_ + "." + source + "." + class_type + ".lateral_left_cost",
+          rclcpp::ParameterValue(0));
+      nav2::declare_parameter_if_not_declared(node,
+          name_ + "." + source + "." + class_type + ".lateral_min_width_pixels",
+          rclcpp::ParameterValue(20));
 
       node->get_parameter(name_ + "." + source + "." + class_type + ".classes", classes_ids);
       if (classes_ids.empty()) {
@@ -218,6 +230,14 @@ void SemanticSegmentationLayer::onInitialize()
           cost_params.samples_to_max_cost);
       node->get_parameter(name_ + "." + source + "." + class_type + ".dominant_priority",
           cost_params.dominant_priority);
+      node->get_parameter(name_ + "." + source + "." + class_type + ".lateral_gradient",
+          cost_params.lateral_gradient);
+      node->get_parameter(name_ + "." + source + "." + class_type + ".lateral_right_cost",
+          cost_params.lateral_right_cost);
+      node->get_parameter(name_ + "." + source + "." + class_type + ".lateral_left_cost",
+          cost_params.lateral_left_cost);
+      node->get_parameter(name_ + "." + source + "." + class_type +
+          ".lateral_min_width_pixels", cost_params.lateral_min_width_pixels);
 
       for (auto & class_id : classes_ids) {
         class_map.insert(std::pair<std::string, CostHeuristicParams>(class_id, cost_params));
@@ -423,7 +443,12 @@ void SemanticSegmentationLayer::updateBounds(
       }
       unsigned int index = getIndex(mx, my);
       CostHeuristicParams cost_params = buffer->getCostForClassId(obs_queue.getClassId());
-      if(static_cast<int>(obs_queue.size()) >= cost_params.samples_to_max_cost &&
+      if (cost_params.lateral_gradient &&
+        obs_queue.getConfidenceSum() / obs_queue.size() > cost_params.mark_confidence)
+      {
+        costmap_[index] = static_cast<uint8_t>(std::lround(
+              obs_queue.getCostSum() / obs_queue.size()));
+      } else if(static_cast<int>(obs_queue.size()) >= cost_params.samples_to_max_cost &&
         obs_queue.getConfidenceSum() / obs_queue.size() > cost_params.mark_confidence)
       {
         costmap_[index] = cost_params.max_cost;

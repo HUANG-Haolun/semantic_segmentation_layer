@@ -92,6 +92,10 @@ private:
   std::unordered_map<TileIndex, TemporalObservationQueue> tile_map_;
   float resolution_;
   float decay_time_;
+  int clear_frames_{0};
+  // Tiles removed since the last takeRemovedTiles(); the layer resets their
+  // costmap cells, which are otherwise only ever written for live tiles.
+  std::vector<TileIndex> removed_tiles_;
   std::recursive_mutex lock_;
 
 public:
@@ -102,8 +106,8 @@ public:
   using ConstIterator = typename std::unordered_map<TileIndex,
       TemporalObservationQueue>::const_iterator;
 
-  SegmentationTileMap(float resolution, float decay_time)
-  : resolution_(resolution), decay_time_(decay_time)
+  SegmentationTileMap(float resolution, float decay_time, int clear_frames = 0)
+  : resolution_(resolution), decay_time_(decay_time), clear_frames_(clear_frames)
   {
     tile_map_.reserve(1e4);
   }
@@ -186,8 +190,38 @@ public:
       // TileIndex does not exist, create a new TemporalObservationQueue with decay time
       TemporalObservationQueue & queue = tile_map_[idx];
       queue.setDecayTime(decay_time_);
+      queue.setClearFrames(clear_frames_);
       queue.push(obs, dominant_priority);
     }
+  }
+
+  /**
+   * @brief Records that an existing tile was observed as an unmarked class
+   * (background or a class without a cost entry), removing the tile once the
+   * contrary evidence reaches clear_frames.
+   * @param idx The index of the tile.
+   */
+  void observeUnmarked(const TileIndex & idx)
+  {
+    auto it = tile_map_.find(idx);
+    if (it == tile_map_.end()) {
+      return;
+    }
+    it->second.observeUnmarked();
+    if (it->second.empty()) {
+      removed_tiles_.emplace_back(it->first);
+      tile_map_.erase(it);
+    }
+  }
+
+  /**
+   * @brief Returns and forgets the tiles removed by decay or contrary evidence.
+   */
+  std::vector<TileIndex> takeRemovedTiles()
+  {
+    std::vector<TileIndex> removed;
+    removed.swap(removed_tiles_);
+    return removed;
   }
 
   /**
@@ -206,6 +240,7 @@ public:
     if(tile_map_.size() > 0) {
       for (auto & tile : tiles_to_remove) {
         tile_map_.erase(tile);
+        removed_tiles_.emplace_back(tile);
       }
     }
   }

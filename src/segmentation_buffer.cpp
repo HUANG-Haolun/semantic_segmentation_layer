@@ -64,6 +64,7 @@ SegmentationBuffer::SegmentationBuffer(
   double min_lookahead_distance, tf2_ros::Buffer & tf2_buffer,
   std::string global_frame, std::string sensor_frame,
   tf2::Duration tf_tolerance, double costmap_resolution, double tile_map_decay_time,
+  int tile_clear_frames,
   bool visualize_tile_map,
   bool use_cost_selection,
   double camera_h_fov, double camera_v_fov,
@@ -91,7 +92,7 @@ SegmentationBuffer::SegmentationBuffer(
   logger_ = node->get_logger();
   last_updated_ = node->now();
   temporal_tile_map_ = std::make_shared<SegmentationTileMap>(costmap_resolution,
-      tile_map_decay_time);
+      tile_map_decay_time, tile_clear_frames);
   visualize_tile_map_ = visualize_tile_map;
   use_cost_selection_ = use_cost_selection;
   RCLCPP_INFO(logger_, "SegmentationBuffer [%s]: Selection method = %s",
@@ -340,6 +341,9 @@ void SegmentationBuffer::bufferSegmentation(
           segmentation_cost_multimap_->getCostById(class_id).dominant_priority;
         temporal_tile_map_->pushObservation(best_obs, costmap_index, dominant_priority);
       } else {
+        // Seen as background / an unconfigured class: contrary evidence
+        // against whatever the tile was marked as before.
+        temporal_tile_map_->observeUnmarked(costmap_index);
         RCLCPP_DEBUG(logger_,
             "SegmentationBuffer [%s]: Skipping undefined class_id %d in tile (%d, %d)",
                       buffer_source_.c_str(), class_id, costmap_index.x, costmap_index.y);

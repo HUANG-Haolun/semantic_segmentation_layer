@@ -65,6 +65,16 @@ void TemporalObservationQueue::push(TileObservation tile_obs, bool dominant_prio
     queue.pop_front();
   }
 
+  // 反证计数：dominant 队列打满 kMaxObservationsPerClass 后，下面按 size 的选举
+  // 永远选不出新类（size 同样饱和在上限，严格大于不可能成立），草坪格被看成 road
+  // 也只能等 tile_map_decay_time 衰减。连续 clear_frames_ 次看到别的类就直接易主。
+  bool contrary_takeover = false;
+  if (dominant_class_id_ == -1 || dominant_class_id_ == class_id) {
+    contrary_streak_ = 0;
+  } else if (clear_frames_ > 0 && ++contrary_streak_ >= clear_frames_) {
+    contrary_takeover = true;
+  }
+
   // Check if this class should become dominant
   size_t current_class_size = queue.size();
   bool should_become_dominant = false;
@@ -73,7 +83,7 @@ void TemporalObservationQueue::push(TileObservation tile_obs, bool dominant_prio
     should_become_dominant = true;
   } else {
     //logic for non-dominant_priority classes: only compete by size
-    should_become_dominant = (current_class_size > dominant_class_size_);
+    should_become_dominant = (current_class_size > dominant_class_size_) || contrary_takeover;
   }
 
   if (should_become_dominant) {
@@ -84,7 +94,23 @@ void TemporalObservationQueue::push(TileObservation tile_obs, bool dominant_prio
 
     // Update dominance
     setDominant(class_id, current_class_size);
+    contrary_streak_ = 0;
   }
+}
+
+void TemporalObservationQueue::observeUnmarked()
+{
+  if (dominant_class_id_ == -1 || clear_frames_ <= 0) {
+    return;
+  }
+  if (++contrary_streak_ < clear_frames_) {
+    return;
+  }
+  class_queues_.clear();
+  class_confidence_sums_.clear();
+  class_cost_sums_.clear();
+  resetDominant();
+  contrary_streak_ = 0;
 }
 
 float TemporalObservationQueue::getCostSum() const

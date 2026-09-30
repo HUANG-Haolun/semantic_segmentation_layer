@@ -178,3 +178,83 @@ TEST(TestTemporalObservationQueue, test_purge_dominant_bookkeeping)
   EXPECT_EQ(queue.getClassId(), 2);
   ASSERT_EQ(queue.getClassQueuesSize(), queue.getConfidenceSumsSize());
 }
+
+/**
+ * A saturated dominant class can never lose the size election, so another
+ * class must take over through consecutive contrary observations.
+ */
+TEST(TestTemporalObservationQueue, test_contrary_class_takes_over_saturated_tile)
+{
+  QueueTestWrapper queue;
+  queue.setDecayTime(3600.0);
+  queue.setClearFrames(3);
+
+  double t = 0.0;
+  for (size_t i = 0; i < TemporalObservationQueue::kMaxObservationsPerClass + 4; ++i) {
+    queue.push(TileObservation{2, 200.0f, t += 1.0});
+  }
+  ASSERT_EQ(queue.getClassId(), 2);
+  ASSERT_EQ(queue.size(), TemporalObservationQueue::kMaxObservationsPerClass);
+
+  queue.push(TileObservation{3, 200.0f, t += 1.0});
+  queue.push(TileObservation{3, 200.0f, t += 1.0});
+  EXPECT_EQ(queue.getClassId(), 2);
+
+  queue.push(TileObservation{3, 200.0f, t += 1.0});
+  EXPECT_EQ(queue.getClassId(), 3);
+  EXPECT_EQ(queue.size(), 3);
+  EXPECT_THROW(queue.getClassQueue(2), std::invalid_argument);
+  ASSERT_EQ(queue.getClassQueuesSize(), queue.getConfidenceSumsSize());
+}
+
+/**
+ * Re-observing the dominant class resets the contrary streak, so isolated
+ * misdetections do not flip the tile.
+ */
+TEST(TestTemporalObservationQueue, test_contrary_streak_resets_on_support)
+{
+  QueueTestWrapper queue;
+  queue.setDecayTime(3600.0);
+  queue.setClearFrames(3);
+
+  queue.push(TileObservation{2, 200.0f, 1.0});
+  queue.push(TileObservation{2, 200.0f, 2.0});
+  queue.push(TileObservation{2, 200.0f, 3.0});
+
+  for (int round = 0; round < 5; ++round) {
+    queue.push(TileObservation{3, 200.0f, 10.0 + round});
+    queue.observeUnmarked();
+    queue.push(TileObservation{2, 200.0f, 20.0 + round});
+  }
+  EXPECT_EQ(queue.getClassId(), 2);
+  EXPECT_FALSE(queue.empty());
+}
+
+/**
+ * Observing background (a class the layer does not mark) clears the tile
+ * after clear_frames consecutive frames; with clearing disabled it does not.
+ */
+TEST(TestTemporalObservationQueue, test_unmarked_observations_clear_tile)
+{
+  QueueTestWrapper queue;
+  queue.setDecayTime(3600.0);
+  queue.setClearFrames(3);
+  queue.push(TileObservation{2, 200.0f, 1.0});
+
+  queue.observeUnmarked();
+  queue.observeUnmarked();
+  EXPECT_FALSE(queue.empty());
+  queue.observeUnmarked();
+  EXPECT_TRUE(queue.empty());
+  EXPECT_EQ(queue.getClassId(), -1);
+  EXPECT_EQ(queue.getClassQueuesSize(), 0u);
+  EXPECT_EQ(queue.getConfidenceSumsSize(), 0u);
+
+  QueueTestWrapper legacy;
+  legacy.setDecayTime(3600.0);
+  legacy.push(TileObservation{2, 200.0f, 1.0});
+  for (int i = 0; i < 10; ++i) {
+    legacy.observeUnmarked();
+  }
+  EXPECT_EQ(legacy.getClassId(), 2);
+}

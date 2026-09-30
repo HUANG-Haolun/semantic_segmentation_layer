@@ -83,3 +83,36 @@ TEST(TestSegmentationTileMap, test_purge_outside_bounds)
     tile_map.purgeOldObservations(10.0);
     EXPECT_EQ(tile_map.size(), 100);
 }
+
+/**
+ * Tiles removed by contrary evidence or by decay are reported once so the
+ * layer can reset their costmap cells.
+ */
+TEST(TestSegmentationTileMap, test_removed_tiles_are_reported)
+{
+    SegmentationTileMap tile_map {0.5, 5.0, 2};
+
+    TileObservation grass {2, 200.0f, 1.0};
+    TileIndex seen_as_background {0, 0};
+    TileIndex decays {3, 3};
+    tile_map.pushObservation(grass, seen_as_background);
+    tile_map.pushObservation(grass, decays);
+
+    tile_map.observeUnmarked(seen_as_background);
+    EXPECT_EQ(tile_map.size(), 2);
+    tile_map.observeUnmarked(seen_as_background);
+    EXPECT_EQ(tile_map.size(), 1);
+
+    // Unknown tiles are ignored rather than created.
+    tile_map.observeUnmarked(TileIndex{9, 9});
+    EXPECT_EQ(tile_map.size(), 1);
+
+    tile_map.purgeOldObservations(10.0);
+    EXPECT_EQ(tile_map.size(), 0);
+
+    auto removed = tile_map.takeRemovedTiles();
+    ASSERT_EQ(removed.size(), 2u);
+    EXPECT_EQ(removed[0], seen_as_background);
+    EXPECT_EQ(removed[1], decays);
+    EXPECT_TRUE(tile_map.takeRemovedTiles().empty());
+}

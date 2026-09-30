@@ -79,6 +79,10 @@ private:
   int dominant_class_id_ = -1;
   size_t dominant_class_size_ = 0;
   double decay_time_;
+  // Consecutive observations contradicting the dominant class, and how many of
+  // them hand the tile over (0 disables evidence-based clearing).
+  int contrary_streak_ = 0;
+  int clear_frames_ = 0;
 
 public:
   TemporalObservationQueue() {}
@@ -107,6 +111,22 @@ public:
    * @param decay_time The decay time in seconds.
    */
   void setDecayTime(float decay_time) {decay_time_ = decay_time;}
+
+  /**
+   * @brief Sets how many consecutive contrary observations replace the dominant class.
+   * @param clear_frames Number of observations; 0 disables evidence-based clearing.
+   */
+  void setClearFrames(int clear_frames) {clear_frames_ = clear_frames;}
+
+  /**
+   * @brief Records that the tile was observed as a class the layer does not
+   * mark (background, or any class without a cost entry).
+   *
+   * Such observations are never stored, so without this the only way a marked
+   * tile could go away was its time decay.  After clear_frames consecutive
+   * contrary observations all classes are dropped and the queue becomes empty.
+   */
+  void observeUnmarked();
 
   /**
    * @brief Gets the current sum of confidence values of the dominant class.

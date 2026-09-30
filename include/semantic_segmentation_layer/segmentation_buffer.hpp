@@ -109,6 +109,7 @@ public:
     double expected_update_rate, double max_lookahead_distance, double min_lookahead_distance,
     tf2_ros::Buffer & tf2_buffer, std::string global_frame, std::string sensor_frame,
     tf2::Duration tf_tolerance, double costmap_resolution, double tile_map_decay_time,
+    int tile_clear_frames,
     bool visualize_tile_map,
     bool use_cost_selection,
     double camera_h_fov, double camera_v_fov,

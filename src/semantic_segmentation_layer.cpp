@@ -129,6 +129,11 @@ void SemanticSegmentationLayer::onInitialize()
         name_ + "." + source + "." + "min_obstacle_distance", rclcpp::ParameterValue(0.3));
     nav2::declare_parameter_if_not_declared(node,
         name_ + "." + source + "." + "tile_map_decay_time", rclcpp::ParameterValue(5.0));
+    // Consecutive frames a tile must be observed as another class (or as an
+    // unconfigured one such as background) before its mark is replaced or
+    // cleared. 0 keeps the old behavior: marks only ever go away by decay.
+    nav2::declare_parameter_if_not_declared(node,
+        name_ + "." + source + "." + "tile_clear_frames", rclcpp::ParameterValue(3));
     nav2::declare_parameter_if_not_declared(node, name_ + "." + source + "." + "visualize_tile_map",
         rclcpp::ParameterValue(false));
     nav2::declare_parameter_if_not_declared(node, name_ + "." + source + "." + "use_cost_selection",
@@ -157,6 +162,8 @@ void SemanticSegmentationLayer::onInitialize()
     node->get_parameter(name_ + "." + source + "." + "min_obstacle_distance",
         min_obstacle_distance);
     node->get_parameter(name_ + "." + source + "." + "tile_map_decay_time", tile_map_decay_time);
+    int tile_clear_frames = 3;
+    node->get_parameter(name_ + "." + source + "." + "tile_clear_frames", tile_clear_frames);
     node->get_parameter(name_ + "." + source + "." + "visualize_tile_map", visualize_tile_map);
     bool use_cost_selection = true;
     node->get_parameter(name_ + "." + source + "." + "use_cost_selection", use_cost_selection);
@@ -267,6 +274,7 @@ void SemanticSegmentationLayer::onInitialize()
         expected_update_rate, max_obstacle_distance,
       min_obstacle_distance, *tf_, global_frame_, "",
       tf2::durationFromSec(transform_tolerance), getResolution(), tile_map_decay_time,
+        tile_clear_frames,
         visualize_tile_map,
       use_cost_selection,
       camera_h_fov, camera_v_fov, fov_decay_time, outside_fov_decay_time, visualize_frustum_fov);
@@ -430,6 +438,18 @@ void SemanticSegmentationLayer::updateBounds(
     tile_map_pair.first->purgeOutsideBounds(
       getOriginX(), getOriginY(),
       getOriginX() + getSizeInMetersX(), getOriginY() + getSizeInMetersY());
+
+    // Cells are only written for live tiles below, so a tile that decayed or
+    // was cleared by contrary evidence would otherwise keep its last cost.
+    for (const auto & removed : tile_map_pair.first->takeRemovedTiles()) {
+      TileWorldXY world = tile_map_pair.first->indexToWorld(removed.x, removed.y);
+      unsigned int mx, my;
+      if (!worldToMap(world.x, world.y, mx, my)) {
+        continue;
+      }
+      costmap_[getIndex(mx, my)] = default_value_;
+      touch(world.x, world.y, min_x, min_y, max_x, max_y);
+    }
 
     for(auto & tile: *tile_map_pair.first) {
       // Check if the tile has valid observations after purge

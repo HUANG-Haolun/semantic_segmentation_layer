@@ -209,6 +209,31 @@ public:
       }
     }
   }
+
+  /**
+   * @brief Removes tiles whose center lies outside the given world-frame box.
+   *
+   * Time decay alone does not bound the map: with a long tile_map_decay_time
+   * every tile the robot has driven past stays alive, and every consumer
+   * (cost update, purge, visualization) walks the whole map each cycle.
+   * Tiles outside the costmap window can never be written to the costmap,
+   * so dropping them caps the map at the window area.
+   * @return The number of tiles removed.
+   */
+  size_t purgeOutsideBounds(double min_x, double min_y, double max_x, double max_y)
+  {
+    size_t removed = 0;
+    for (auto it = tile_map_.begin(); it != tile_map_.end(); ) {
+      TileWorldXY world = indexToWorld(it->first.x, it->first.y);
+      if (world.x < min_x || world.x > max_x || world.y < min_y || world.y > max_y) {
+        it = tile_map_.erase(it);
+        ++removed;
+      } else {
+        ++it;
+      }
+    }
+    return removed;
+  }
 };
 
 #endif  // SEMANTIC_SEGMENTATION_LAYER__SEGMENTATION_TILE_MAP_HPP_

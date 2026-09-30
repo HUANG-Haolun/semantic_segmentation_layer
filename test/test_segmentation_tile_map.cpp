@@ -48,3 +48,38 @@ TEST(TestSegmentationTileMap, test_push_set_decay_time)
     tile_map.purgeOldObservations(3.0);
     EXPECT_EQ(tile_map.size(), 0);
 }
+
+/**
+ * Long decay times must not let tiles the robot has left behind accumulate:
+ * tiles outside the costmap window are dropped regardless of their age.
+ */
+TEST(TestSegmentationTileMap, test_purge_outside_bounds)
+{
+    SegmentationTileMap tile_map {0.5, 3600.0};
+
+    TileObservation observation {1, 1.0, 1.0};
+    for (int x = -20; x < 20; ++x) {
+        for (int y = -20; y < 20; ++y) {
+            TileIndex index {x, y};
+            tile_map.pushObservation(observation, index);
+        }
+    }
+    ASSERT_EQ(tile_map.size(), 1600);
+
+    // Window [-2.5, 2.5] x [-2.5, 2.5] at 0.5 m keeps tile centers -2.25..2.25.
+    EXPECT_EQ(tile_map.purgeOutsideBounds(-2.5, -2.5, 2.5, 2.5), 1500u);
+    EXPECT_EQ(tile_map.size(), 100);
+    for (const auto & tile : tile_map) {
+        TileWorldXY world = tile_map.indexToWorld(tile.first.x, tile.first.y);
+        EXPECT_GE(world.x, -2.5);
+        EXPECT_LE(world.x, 2.5);
+        EXPECT_GE(world.y, -2.5);
+        EXPECT_LE(world.y, 2.5);
+    }
+
+    // Nothing else is removed while the window stays put, and time decay
+    // still applies to the tiles that remain.
+    EXPECT_EQ(tile_map.purgeOutsideBounds(-2.5, -2.5, 2.5, 2.5), 0u);
+    tile_map.purgeOldObservations(10.0);
+    EXPECT_EQ(tile_map.size(), 100);
+}

@@ -427,6 +427,9 @@ void SemanticSegmentationLayer::updateBounds(
 
     // Purge old observations in updateBounds before computing costs to ensure the costmap accurately reflects the current state after decay, maintaining consistency between the buffer and the costmap.
     tile_map_pair.first->purgeOldObservations(current_time);
+    tile_map_pair.first->purgeOutsideBounds(
+      getOriginX(), getOriginY(),
+      getOriginX() + getSizeInMetersX(), getOriginY() + getSizeInMetersY());
 
     for(auto & tile: *tile_map_pair.first) {
       // Check if the tile has valid observations after purge

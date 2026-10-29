@@ -82,11 +82,16 @@ void SemanticSegmentationLayer::onInitialize()
       rclcpp::ParameterValue(true));
   nav2::declare_parameter_if_not_declared(node, name_ + "." + "sensor_data_depth",
       rclcpp::ParameterValue(10));
+  // Same semantics as ObstacleLayer: cells under the robot footprint are written
+  // as free before merging. Tiles are kept, so marks reappear once the robot leaves.
+  nav2::declare_parameter_if_not_declared(node, name_ + "." + "footprint_clearing_enabled",
+      rclcpp::ParameterValue(false));
 
   node->get_parameter(name_ + "." + "enabled", enabled_);
   node->get_parameter(name_ + "." + "combination_method", combination_method_);
   node->get_parameter(name_ + "." + "use_approximate_time_sync", use_approximate_time_sync_);
   node->get_parameter(name_ + "." + "sensor_data_depth", sensor_data_depth_);
+  node->get_parameter(name_ + "." + "footprint_clearing_enabled", footprint_clearing_enabled_);
   node->get_parameter("track_unknown_space", track_unknown_space);
   node->get_parameter("transform_tolerance", transform_tolerance);
 
@@ -399,7 +404,7 @@ void SemanticSegmentationLayer::onInitialize()
 // Inside this method window bounds are re-calculated if need_recalculation_ is true
 // and updated independently on its value.
 void SemanticSegmentationLayer::updateBounds(
-  double robot_x, double robot_y, double /*robot_yaw*/,
+  double robot_x, double robot_y, double robot_yaw,
   double * min_x, double * min_y, double * max_x,
   double * max_y)
 {
@@ -483,6 +488,14 @@ void SemanticSegmentationLayer::updateBounds(
     buffer->unlock();
   }
 
+  if (footprint_clearing_enabled_) {
+    nav2_costmap_2d::transformFootprint(robot_x, robot_y, robot_yaw, getFootprint(),
+        transformed_footprint_);
+    for (const auto & pt : transformed_footprint_) {
+      touch(pt.x, pt.y, min_x, min_y, max_x, max_y);
+    }
+  }
+
   current_ = true;
 }
 
@@ -514,6 +527,9 @@ void SemanticSegmentationLayer::updateCosts(
   }
   if (!costmap_) {
     return;
+  }
+  if (footprint_clearing_enabled_) {
+    setConvexPolygonCost(transformed_footprint_, nav2_costmap_2d::FREE_SPACE);
   }
   // RCLCPP_INFO(logger_, "Updating costmap");
   switch (combination_method_) {

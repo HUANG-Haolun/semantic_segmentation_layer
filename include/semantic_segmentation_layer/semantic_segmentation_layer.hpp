@@ -42,6 +42,7 @@
 #include <unordered_map>
 #include <variant>
 
+#include "geometry_msgs/msg/point.hpp"
 #include "rclcpp/rclcpp.hpp"
 #include "rclcpp/version.h"
 #include "rclcpp_lifecycle/lifecycle_node.hpp"
@@ -218,6 +219,8 @@ private:
   bool use_approximate_time_sync_;
   int sensor_data_depth_;
   int combination_method_;
+  bool footprint_clearing_enabled_{false};
+  std::vector<geometry_msgs::msg::Point> transformed_footprint_;
 };
 
 }  // namespace semantic_segmentation_layer
